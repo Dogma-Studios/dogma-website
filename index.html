@@ -698,8 +698,8 @@
 
     <!-- ========== WEBGPU SCRIPT ========== -->
     <script>
-    const NUM_PARTICLES = 45000;
-    const NUM_STREAMS = 7;
+    const NUM_PARTICLES = 1000000;
+    const NUM_STREAMS = 25;
     const WORKGROUP_SIZE = 64;
 
     const canvas = document.getElementById('hero-canvas');
@@ -814,8 +814,8 @@
                 let upSpeed = 0.00014 + p.size * 0.00006;
                 p.vel.y += upSpeed;
                 
-                let streamCenter = (p.stream - 0.5) * 0.7;
-                p.vel.x += (streamCenter - p.pos.x) * 0.0018;
+                let streamCenter = (p.stream - 0.5) * 2.2;
+                p.vel.x += (streamCenter - p.pos.x) * 0.0005;
                 
                 let mousePos = vec2f(uniforms.mouseX, uniforms.mouseY);
                 let toMouse = p.pos - mousePos;
@@ -844,21 +844,21 @@
                     p.life = min(p.life + 0.006, basLife);
                 }
                 
-                if (p.pos.y > 1.0 || p.life < 0.05 || abs(p.pos.x) > 0.75 || p.size < 0.1) {
+                if (p.pos.y > 1.0 || p.life < 0.03 || abs(p.pos.x) > 1.8 || p.size < 0.05) {
                     let s = p.seed + uniforms.time * 0.1;
-                    p.stream = floor(rand(s) * ${NUM_STREAMS}.0) / ${NUM_STREAMS}.0;
-                    let sc = (p.stream - 0.5) * 0.7;
+                    p.stream = floor(rand(s) * 25.0) / 25.0;
+                    let sc = (p.stream - 0.5) * 2.2;
                     
-                    p.pos.x = sc + (rand(s * 2.0) - 0.5) * 0.04;
+                    p.pos.x = sc + (rand(s * 2.0) - 0.5) * 0.3;
                     p.pos.y = -0.95 - rand(s * 3.0) * 0.1;
                     p.vel = vec2f(0.0, 0.00006);
-                    p.life = 0.15;
+                    p.life = 0.5;
                     
                     let sr = rand(s * 6.0);
-                    if (sr < 0.4) { p.size = 0.2 + sr * 0.5; }
-                    else if (sr < 0.75) { p.size = 0.4 + (sr - 0.4) * 1.0; }
-                    else if (sr < 0.92) { p.size = 0.7 + (sr - 0.75) * 1.2; }
-                    else { p.size = 1.0 + (sr - 0.92) * 2.0; }
+                    if (sr < 0.5) { p.size = 0.15 + sr * 0.4; }
+                    else if (sr < 0.8) { p.size = 0.35 + (sr - 0.5) * 0.6; }
+                    else if (sr < 0.95) { p.size = 0.55 + (sr - 0.8) * 0.8; }
+                    else { p.size = 0.75 + (sr - 0.95) * 1.5; }
                     p.seed = rand(s * 7.0) * 1000.0;
                 }
                 
@@ -900,7 +900,7 @@
                     vec2f(-1, 1), vec2f(1, -1), vec2f(1, 1)
                 );
                 
-                let size = p.size * 0.010 * (0.5 + p.life * 0.5);
+                let size = p.size * 0.009 * (0.5 + p.life * 0.5);
                 var pos = p.pos + quad[vi] * size;
                 pos.x /= uniforms.aspectRatio;
                 
@@ -917,7 +917,7 @@
                 var out: VSOut;
                 out.pos = vec4f(pos, 0.0, 1.0);
                 out.uv = quad[vi] * 0.5 + 0.5;
-                out.color = vec4f(col, p.life * 0.85);
+                out.color = vec4f(col, p.life * 0.95);
                 out.velocity = p.vel;
                 return out;
             }
@@ -927,38 +927,34 @@
                 var uv = in.uv;
                 let speed = length(in.velocity);
                 
-                // More pronounced stretching for teardrop shape
-                let stretch = 1.0 + speed * 80.0;
-                uv.y = 0.5 + (uv.y - 0.5) / max(stretch * 0.6, 1.0);
+                // Strong stretching for elongated teardrop
+                let stretch = 1.0 + speed * 120.0;
+                uv.y = 0.5 + (uv.y - 0.5) / max(stretch * 0.7, 1.0);
                 
-                // Offset center for teardrop (bulge at bottom)
-                let teardropOffset = vec2f(0.5, 0.45 + speed * 2.0);
-                let d = length(uv - teardropOffset) * 2.0;
+                // Teardrop shape - pointed at top, round at bottom
+                var d = length(uv - vec2f(0.5, 0.5)) * 2.0;
                 
-                // Softer droplet edge
-                let droplet = smoothstep(1.0, 0.5, d);
+                // Squash horizontally for thinner droplet
+                let squashedUV = vec2f((uv.x - 0.5) * 1.4 + 0.5, uv.y);
+                d = length(squashedUV - vec2f(0.5, 0.5)) * 2.0;
                 
-                // Enhanced water-like highlights (specular reflections)
-                let highlight1 = smoothstep(0.25, 0.0, length(in.uv - vec2f(0.38, 0.32))) * 0.7;
-                let highlight2 = smoothstep(0.15, 0.0, length(in.uv - vec2f(0.55, 0.35))) * 0.35;
-                let highlight3 = smoothstep(0.08, 0.0, length(in.uv - vec2f(0.62, 0.40))) * 0.2;
+                // Soft droplet edge with more falloff
+                let droplet = smoothstep(1.0, 0.3, d);
                 
-                // Rim lighting for water surface tension look
-                let rim = smoothstep(0.4, 0.9, d) * 0.3;
+                // Subtle specular highlights
+                let highlight1 = smoothstep(0.18, 0.0, length(in.uv - vec2f(0.4, 0.35))) * 0.5;
+                let highlight2 = smoothstep(0.10, 0.0, length(in.uv - vec2f(0.55, 0.38))) * 0.25;
                 
-                // Soft inner glow
-                let glow = exp(-d * d * 3.0) * 0.15;
+                // Very soft glow
+                let glow = exp(-d * d * 4.0) * 0.08;
                 
-                // Refraction-like color shift at edges
-                let edgeShift = smoothstep(0.3, 0.8, d) * 0.15;
+                // More transparent overall
+                let finalAlpha = (droplet * 0.85 + glow) * in.color.a;
+                var finalColor = in.color.rgb + vec3f(highlight1 + highlight2);
                 
-                let finalAlpha = (droplet + glow) * in.color.a;
-                var finalColor = in.color.rgb * (1.0 - rim + edgeShift);
-                finalColor += vec3f(highlight1 + highlight2 + highlight3);
+                if (finalAlpha < 0.005) { discard; }
                 
-                if (finalAlpha < 0.015) { discard; }
-                
-                return vec4f(finalColor * droplet + in.color.rgb * glow * 0.5, finalAlpha);
+                return vec4f(finalColor * droplet + in.color.rgb * glow * 0.3, finalAlpha);
             }
         `;
 
@@ -990,8 +986,8 @@
                 let y = in.uv.y;
                 var col = vec3f(0.0);
                 
-                for (var i = 0.0; i < ${NUM_STREAMS}.0; i += 1.0) {
-                    let streamX = 0.5 + (i - ${NUM_STREAMS}.0 * 0.5 + 0.5) * 0.05;
+                for (var i = 0.0; i < 25.0; i += 1.0) {
+                    let streamX = 0.5 + (i - 25.0 * 0.5 + 0.5) * 0.042;
                     let dist = abs(x - streamX);
                     
                     let line = smoothstep(0.0012, 0.0, dist) * 0.08;
@@ -1017,16 +1013,16 @@
         const particleData = new Float32Array(NUM_PARTICLES * 8);
         for (let i = 0; i < NUM_PARTICLES; i++) {
             const idx = i * 8;
-            const stream = Math.floor(Math.random() * NUM_STREAMS) / NUM_STREAMS;
-            const streamCenter = (stream - 0.5) * 0.7;
+            const stream = Math.floor(Math.random() * 25) / 25;
+            const streamCenter = (stream - 0.5) * 2.2;
             const sr = Math.random();
-            let size = sr < 0.4 ? 0.2 + sr * 0.5 : sr < 0.75 ? 0.4 + (sr - 0.4) * 1.0 : sr < 0.92 ? 0.7 + (sr - 0.75) * 1.2 : 1.0 + (sr - 0.92) * 2.0;
+            let size = sr < 0.5 ? 0.15 + sr * 0.4 : sr < 0.8 ? 0.35 + (sr - 0.5) * 0.6 : sr < 0.95 ? 0.55 + (sr - 0.8) * 0.8 : 0.75 + (sr - 0.95) * 1.5;
             
-            particleData[idx] = streamCenter + (Math.random() - 0.5) * 0.04;
+            particleData[idx] = streamCenter + (Math.random() - 0.5) * 0.3;
             particleData[idx + 1] = -0.95 + Math.random() * 1.9;
             particleData[idx + 2] = 0;
             particleData[idx + 3] = 0.00006;
-            particleData[idx + 4] = Math.random();
+            particleData[idx + 4] = 0.5 + Math.random() * 0.5;
             particleData[idx + 5] = size;
             particleData[idx + 6] = stream;
             particleData[idx + 7] = Math.random() * 1000;
